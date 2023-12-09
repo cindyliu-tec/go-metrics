@@ -1,0 +1,85 @@
+# docs for golangci-lint:  https://golangci-lint.run/
+run:
+  # timeout for analysis, e.g. 30s, 5m, default is 1m
+  timeout: 5m
+  # include test files or not, default is true
+  tests: true
+  # skip dirs
+  skip-dirs:
+    - deploy
+    - cmd
+
+# replace default linter with whitelist
+linters:
+  disable-all: true
+  enable:
+    - errcheck # Errcheck is a program for checking for unchecked errors in go programs. These unchecked errors can be critical bugs in some cases
+    - gosimple # simplifying a code
+    - govet # examines Go source code and reports suspicious constructs
+    - ineffassign # detects when assignments to existing variables are not used
+    - staticcheck # go vet on steroids
+    - typecheck # like the front-end of a Go compiler, parses and type-checks Go code
+    - unused # checks Go code for unused constants, variables, functions and types
+    - gocyclo # computes and checks the cyclomatic complexity of functions
+    - bodyclose # checks whether HTTP response body is closed successfully
+    - unconvert # remove unnecessary type conversions
+    - unparam # reports unused function parameters
+    - depguard # checks if package imports are in a list of acceptable packages
+    - goconst # finds repeated strings that could be replaced by a constant
+    - gomnd # detect magic numbers
+    - gofmt # gofmt checks whether code was gofmt-ed
+    - gosec # inspects source code for security problems
+    - lll # reports long lines
+    - misspell # finds commonly misspelled English words in comments
+
+linters-settings:
+  dupl:
+    threshold: 200
+  lll:
+    line-length: 180
+  gocyclo:
+    min-complexity: 20
+  golint:
+    min-confidence: 0.85
+  govet:
+    check-shadowing: true
+  maligned:
+    suggest-new: true
+  goconst:
+    min-len: 2
+    min-occurrences: 2
+  unused:
+    check-exported: false
+  gomnd:
+    # List of enabled checks, see https://github.com/tommy-muehle/go-mnd/#checks for description.
+    # Default: ["argument", "case", "condition", "operation", "return", "assign"]
+    checks:
+      - argument
+      - case
+      - condition
+      - operation
+      - return
+      - assign
+  gofmt:
+    # simplify code: gofmt with `-s` option, true by default
+    simplify: true
+    # Apply the rewrite rules to the source before reformatting.
+    # https://pkg.go.dev/cmd/gofmt
+    # Default: []
+    rewrite-rules:
+      - pattern: "interface{}"
+        replacement: "any"
+      - pattern: "a[b:len(a)]"
+        replacement: "a[b:]"
+
+issues:
+  # Excluding configuration per-path, per-linter, per-text and per-source
+  exclude-rules:
+    # Exclude some linters from running on tests files.
+    - path: _test\.go
+      linters:
+        - errcheck
+        - dupl
+        - gosec
+        - mnd
+        - gofmt
