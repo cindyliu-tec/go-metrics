@@ -20,13 +20,15 @@ const (
 	Summary
 
 	defaultMetricPath = "/metrics"
-	defaultPort       = ":12345"
+	defaultPort       = ":6633"
 	defaultSlowTime   = int32(5)
 	timeoutInSeconds  = 5
+	metricPrefix      = "mk_"
 )
 
 var (
-	defaultDuration = []float64{0.05, 0.1, 0.3, 0.35, 0.4, 0.5, 0.8, 1, 2, 3, 5, 10}
+	defaultDuration = []float64{0.05, 0.1, 0.2, 0.3, 0.4, 0.6, 0.8, 1, 2, 3, 5, 10}
+	initLabels      = []string{"env", "namespace", "app", "pod"}
 	monitor         *Monitor
 
 	promTypeHandler = map[MetricType]func(metric *Metric) error{
@@ -39,11 +41,12 @@ var (
 
 // Monitor is an object that uses to set gin server monitor.
 type Monitor struct {
-	slowTime    int32
-	metricPath  string
-	reqDuration []float64
-	metrics     map[string]*Metric
-	server      *http.Server
+	slowTime     int32
+	metricPath   string
+	reqDuration  []float64
+	metrics      map[string]*Metric
+	server       *http.Server
+	promRegistry *prometheus.Registry
 }
 
 // GetMonitor 返回单例 Monitor 对象
@@ -60,6 +63,7 @@ func GetMonitor() *Monitor {
 				ReadHeaderTimeout: timeoutInSeconds * time.Second,
 				WriteTimeout:      timeoutInSeconds * time.Second,
 			},
+			promRegistry: prometheus.NewRegistry(),
 		}
 	}
 	return monitor
@@ -67,7 +71,7 @@ func GetMonitor() *Monitor {
 
 // 启动指标服务端口
 func (m *Monitor) setupServer() error {
-	http.Handle(m.metricPath, promhttp.Handler())
+	http.Handle(m.metricPath, promhttp.HandlerFor(m.promRegistry, promhttp.HandlerOpts{}))
 	var err error
 	go func() {
 		log.Println("Start Metric Server ", m.server.Addr)
@@ -80,7 +84,7 @@ func (m *Monitor) setupServer() error {
 
 // GetMetric used to get metric object by metric_name.
 func (m *Monitor) GetMetric(name string) *Metric {
-	if metric, ok := m.metrics[name]; ok {
+	if metric, ok := m.metrics[metricPrefix+name]; ok {
 		return metric
 	}
 	return &Metric{}
@@ -106,16 +110,18 @@ func (m *Monitor) SetDuration(duration []float64) {
 
 // AddMetric 添加自定义指标.
 func (m *Monitor) AddMetric(metric *Metric) error {
+	if metric.Name == "" {
+		return errors.Errorf("metric name cannot be empty.")
+	}
+	metric.Name = metricPrefix + metric.Name
 	if _, ok := m.metrics[metric.Name]; ok {
 		return errors.Errorf("metric '%s' is existed", metric.Name)
 	}
 
-	if metric.Name == "" {
-		return errors.Errorf("metric name cannot be empty.")
-	}
 	if f, ok := promTypeHandler[metric.Type]; ok {
+		metric.Labels = append(initLabels, metric.Labels...)
 		if err := f(metric); err == nil {
-			prometheus.MustRegister(metric.vec)
+			m.promRegistry.MustRegister(metric.vec)
 			m.metrics[metric.Name] = metric
 			return nil
 		}

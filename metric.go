@@ -1,8 +1,14 @@
 package go_metrics
 
 import (
+	"os"
+
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
+)
+
+var (
+	initLabelValues = []string{os.Getenv("PROJECT_ENV"), os.Getenv("NAMESPACE"), os.Getenv("APP_NAME"), os.Getenv("HOSTNAME")}
 )
 
 // Metric defines a metric object. Users can use it to save
@@ -27,6 +33,7 @@ func (m *Metric) SetGaugeValue(labelValues []string, value float64) error {
 	if m.Type != Gauge {
 		return errors.Errorf("metric '%s' not Gauge type", m.Name)
 	}
+	labelValues = append(initLabelValues, labelValues...)
 	m.vec.(*prometheus.GaugeVec).WithLabelValues(labelValues...).Set(value)
 	return nil
 }
@@ -41,6 +48,7 @@ func (m *Metric) Inc(labelValues []string) error {
 	if m.Type != Gauge && m.Type != Counter {
 		return errors.Errorf("metric '%s' not Gauge or Counter type", m.Name)
 	}
+	labelValues = append(initLabelValues, labelValues...)
 	switch m.Type {
 	case Counter:
 		m.vec.(*prometheus.CounterVec).WithLabelValues(labelValues...).Inc()
@@ -60,6 +68,7 @@ func (m *Metric) Add(labelValues []string, value float64) error {
 	if m.Type != Gauge && m.Type != Counter {
 		return errors.Errorf("metric '%s' not Gauge or Counter type", m.Name)
 	}
+	labelValues = append(initLabelValues, labelValues...)
 	switch m.Type {
 	case Counter:
 		m.vec.(*prometheus.CounterVec).WithLabelValues(labelValues...).Add(value)
@@ -78,6 +87,7 @@ func (m *Metric) Observe(labelValues []string, value float64) error {
 	if m.Type != Histogram && m.Type != Summary {
 		return errors.Errorf("metric '%s' not Histogram or Summary type", m.Name)
 	}
+	labelValues = append(initLabelValues, labelValues...)
 	switch m.Type {
 	case Histogram:
 		m.vec.(*prometheus.HistogramVec).WithLabelValues(labelValues...).Observe(value)

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"os"
 	"regexp"
 	"strconv"
 	"time"
@@ -16,10 +15,9 @@ import (
 var (
 	metricRequestDuration = "gin_uri_request_duration"
 	metricSlowRequest     = "gin_slow_request_total"
-	env                   = os.Getenv("PROJECT_ENV")
-	pod                   = os.Getenv("HOSTNAME")
-	app                   = os.Getenv("APP_NAME")
+	metricSDKVersion      = "monitor_sdk_version"
 	ctExpr, _             = regexp.Compile("application/json")
+	version               = "0.0.1"
 )
 
 // Use set gin metrics middleware
@@ -34,19 +32,30 @@ func Use(r gin.IRoutes) {
 
 // initGinMetrics used to init default metrics
 func (m *Monitor) initGinMetrics() {
+	// api耗时指标
 	_ = monitor.AddMetric(&Metric{
 		Type:        Histogram,
 		Name:        metricRequestDuration,
 		Description: "the time server took to handle the request.",
-		Labels:      []string{"env", "app", "pod", "uri", "method", "code"},
+		Labels:      []string{"uri", "method", "httpcode", "code"},
 		Buckets:     m.reqDuration,
 	})
+	// 慢请求指标
 	_ = monitor.AddMetric(&Metric{
 		Type:        Counter,
 		Name:        metricSlowRequest,
 		Description: fmt.Sprintf("the server handled slow requests counter, t=%d.", m.slowTime),
-		Labels:      []string{"env", "app", "pod", "uri", "method", "code"},
+		Labels:      []string{"uri", "method", "httpcode", "code"},
 	})
+
+	_ = monitor.AddMetric(&Metric{
+		Type:        Gauge,
+		Name:        metricSDKVersion,
+		Description: "current used monitor pkg version",
+		Labels:      []string{"version"},
+	})
+	// 上报当前sdk版本
+	_ = m.GetMetric(metricSDKVersion).SetGaugeValue([]string{version}, 1)
 }
 
 type responseWriter struct {
@@ -72,24 +81,28 @@ func (m *Monitor) monitorInterceptor(ctx *gin.Context) {
 
 	// 读取业务code
 	var code = "-1"
-	if ctExpr.MatchString(ctx.Request.Response.Header.Get("content-type")) {
-		data := response.APIModel{}
+	if ctExpr.MatchString(ctx.Writer.Header().Get("content-type")) {
+		var data = response.APIModel{
+			Code: -1,
+		}
 		if err := json.Unmarshal(writer.b.Bytes(), &data); err == nil {
 			code = strconv.Itoa(int(data.Code))
 		}
 	}
+	httpcode := ctx.Writer.Status()
 	writer.b = nil
-	m.ginMetricHandle(ctx, startTime, code)
+	m.ginMetricHandle(ctx, startTime, strconv.Itoa(httpcode), code)
 }
 
-func (m *Monitor) ginMetricHandle(ctx *gin.Context, start time.Time, code string) {
+func (m *Monitor) ginMetricHandle(ctx *gin.Context, start time.Time, httpcode string, code string) {
 	r := ctx.Request
 	// set slow request
 	latency := time.Since(start)
+	labels := []string{ctx.FullPath(), r.Method, httpcode, code}
 	if int32(latency.Seconds()) > m.slowTime {
-		_ = m.GetMetric(metricSlowRequest).Inc([]string{env, app, pod, ctx.FullPath(), r.Method, code})
+		_ = m.GetMetric(metricSlowRequest).Inc(labels)
 	}
 
 	// set request duration
-	_ = m.GetMetric(metricRequestDuration).Observe([]string{env, app, pod, ctx.FullPath(), r.Method, code}, latency.Seconds())
+	_ = m.GetMetric(metricRequestDuration).Observe(labels, latency.Seconds())
 }
