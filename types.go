@@ -19,8 +19,8 @@ const (
 	Histogram
 	Summary
 
-	defaultMetricPath = "/metrics"
-	defaultPort       = ":6633"
+	defaultMetricPath = "/mk/metrics"
+	defaultPort       = "13116"
 	defaultSlowTime   = int32(5)
 	timeoutInSeconds  = 5
 	metricPrefix      = "mk_"
@@ -58,7 +58,7 @@ func GetMonitor() *Monitor {
 			reqDuration: defaultDuration,
 			metrics:     make(map[string]*Metric),
 			server: &http.Server{
-				Addr:              defaultPort,
+				Addr:              ":" + defaultPort,
 				ReadTimeout:       timeoutInSeconds * time.Second,
 				ReadHeaderTimeout: timeoutInSeconds * time.Second,
 				WriteTimeout:      timeoutInSeconds * time.Second,
@@ -94,6 +94,10 @@ func (m *Monitor) GetMetric(name string) *Metric {
 // to get gin server monitoring data.
 func (m *Monitor) SetMetricPath(path string) {
 	m.metricPath = path
+}
+
+func (m *Monitor) SetPort(port string) {
+	m.server.Addr = ":" + port
 }
 
 // SetSlowTime set slowTime property. slowTime is used to determine whether
