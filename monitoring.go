@@ -84,7 +84,7 @@ func (m *Monitor) monitorInterceptor(ctx *gin.Context) {
 	var writer *responseWriter
 	var code = "-1"
 	// websocket请求和文件上传请求不处理
-	if fileCTExpr.MatchString(ctx.Writer.Header().Get("content-type")) || ctx.Request.Header.Get("upgrade") == "websocket" {
+	if fileCTExpr.MatchString(ctx.Request.Header.Get("content-type")) || ctx.Request.Header.Get("upgrade") == "websocket" {
 		isSimpleRequest = false
 		form, err := ctx.MultipartForm()
 		// 如果上传文件数为0，当作简单请求处理
