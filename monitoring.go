@@ -15,8 +15,10 @@ import (
 var (
 	metricRequestDuration = "gin_uri_request_duration"
 	metricSlowRequest     = "gin_slow_request_total"
+	metricLongRequest     = "gin_long_request_total"
 	metricSDKVersion      = "monitor_sdk_version"
-	ctExpr, _             = regexp.Compile("application/json")
+	jsonCTExpr, _         = regexp.Compile("application/json")
+	fileCTExpr, _         = regexp.Compile("multipart/form-data｜image｜octet-stream")
 	version               = "0.0.1"
 )
 
@@ -49,6 +51,13 @@ func (m *Monitor) initGinMetrics() {
 	})
 
 	_ = monitor.AddMetric(&Metric{
+		Type:        Counter,
+		Name:        metricLongRequest,
+		Description: "the server handled long requests counter, like websocket、fileupload",
+		Labels:      []string{"uri", "method", "httpcode", "code"},
+	})
+
+	_ = monitor.AddMetric(&Metric{
 		Type:        Gauge,
 		Name:        metricSDKVersion,
 		Description: "current used monitor pkg version",
@@ -71,38 +80,56 @@ func (w responseWriter) Write(b []byte) (int, error) {
 // monitorInterceptor as gin monitor middleware.
 func (m *Monitor) monitorInterceptor(ctx *gin.Context) {
 	startTime := time.Now()
-	writer := responseWriter{
-		ResponseWriter: ctx.Writer,
-		b:              bytes.NewBuffer([]byte{}),
+	isSimpleRequest := true
+	var writer *responseWriter
+	var code = "-1"
+	// websocket请求和文件上传请求不处理
+	if fileCTExpr.MatchString(ctx.Writer.Header().Get("content-type")) || ctx.Request.Header.Get("upgrade") == "websocket" {
+		isSimpleRequest = false
+		form, err := ctx.MultipartForm()
+		// 如果上传文件数为0，当作简单请求处理
+		if err == nil && len(form.File) == 0 {
+			isSimpleRequest = true
+		}
 	}
-	ctx.Writer = writer
+	if isSimpleRequest {
+		writer = &responseWriter{
+			ResponseWriter: ctx.Writer,
+			b:              bytes.NewBuffer([]byte{}),
+		}
+		ctx.Writer = writer
+	}
+
 	// 执行请求其他流程
 	ctx.Next()
 
-	// 读取业务code
-	var code = "-1"
-	if ctExpr.MatchString(ctx.Writer.Header().Get("content-type")) {
+	// 简单请求如果返回json，读取业务code
+	if isSimpleRequest && jsonCTExpr.MatchString(ctx.Writer.Header().Get("content-type")) {
 		var data = response.APIModel{
 			Code: -1,
 		}
 		if err := json.Unmarshal(writer.b.Bytes(), &data); err == nil {
 			code = strconv.Itoa(int(data.Code))
 		}
+		writer.b = nil
 	}
 	httpcode := ctx.Writer.Status()
-	writer.b = nil
-	m.ginMetricHandle(ctx, startTime, strconv.Itoa(httpcode), code)
+	m.ginMetricHandle(ctx, isSimpleRequest, startTime, strconv.Itoa(httpcode), code)
 }
 
-func (m *Monitor) ginMetricHandle(ctx *gin.Context, start time.Time, httpcode string, code string) {
-	r := ctx.Request
-	// set slow request
-	latency := time.Since(start)
-	labels := []string{ctx.FullPath(), r.Method, httpcode, code}
-	if int32(latency.Seconds()) > m.slowTime {
-		_ = m.GetMetric(metricSlowRequest).Inc(labels)
-	}
+func (m *Monitor) ginMetricHandle(ctx *gin.Context, simpleRequest bool, start time.Time, httpcode string, code string) {
+	// 共同的label
+	labels := []string{ctx.FullPath(), ctx.Request.Method, httpcode, code}
 
-	// set request duration
-	_ = m.GetMetric(metricRequestDuration).Observe(labels, latency.Seconds())
+	if simpleRequest {
+		latency := time.Since(start)
+		if int32(latency.Seconds()) > m.slowTime {
+			_ = m.GetMetric(metricSlowRequest).Inc(labels)
+		}
+
+		// set request duration
+		_ = m.GetMetric(metricRequestDuration).Observe(labels, latency.Seconds())
+	} else {
+		_ = m.GetMetric(metricLongRequest).Inc(labels)
+	}
 }
