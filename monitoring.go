@@ -18,7 +18,7 @@ var (
 	metricLongRequest     = "gin_long_request_total"
 	metricSDKVersion      = "monitor_sdk_version"
 	jsonCTExpr, _         = regexp.Compile("application/json")
-	fileCTExpr, _         = regexp.Compile("multipart/form-data｜image｜octet-stream")
+	fileCTExpr, _         = regexp.Compile("multipart/form-data|image|octet-stream")
 	version               = "0.0.1"
 )
 
