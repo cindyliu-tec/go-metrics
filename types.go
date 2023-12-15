@@ -27,7 +27,7 @@ const (
 )
 
 var (
-	defaultDuration = []float64{0.05, 0.1, 0.2, 0.3, 0.4, 0.6, 0.8, 1, 2, 3, 5, 10}
+	defaultDuration = []float64{0.005, 0.02, 0.05, 0.1, 0.2, 0.3, 0.5, 0.8, 1, 1.2, 1.5, 2, 3, 5, 10}
 	initLabels      = []string{"env", "namespace", "app", "pod"}
 	monitor         *Monitor
 

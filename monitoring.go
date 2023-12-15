@@ -19,7 +19,7 @@ var (
 	metricSDKVersion      = "monitor_sdk_version"
 	jsonCTExpr, _         = regexp.Compile("application/json")
 	fileCTExpr, _         = regexp.Compile("multipart/form-data|image|octet-stream")
-	version               = "0.0.1"
+	version               = "0.0.7"
 )
 
 // Use set gin metrics middleware
@@ -81,15 +81,20 @@ func (w responseWriter) Write(b []byte) (int, error) {
 func (m *Monitor) monitorInterceptor(ctx *gin.Context) {
 	startTime := time.Now()
 	isSimpleRequest := true
+	noFile := true
 	var writer *responseWriter
 	var code = "-1"
-	// websocket请求和文件上传请求不处理
-	if fileCTExpr.MatchString(ctx.Request.Header.Get("content-type")) || ctx.Request.Header.Get("upgrade") == "websocket" {
+	// websocket请求
+	if ctx.Request.Header.Get("upgrade") == "websocket" {
 		isSimpleRequest = false
+	}
+	// 文件上传请求
+	if fileCTExpr.MatchString(ctx.Request.Header.Get("content-type")) {
+		noFile = false
 		form, err := ctx.MultipartForm()
 		// 如果上传文件数为0，当作简单请求处理
 		if err == nil && len(form.File) == 0 {
-			isSimpleRequest = true
+			noFile = true
 		}
 	}
 	if isSimpleRequest {
@@ -114,21 +119,22 @@ func (m *Monitor) monitorInterceptor(ctx *gin.Context) {
 		writer.b = nil
 	}
 	httpcode := ctx.Writer.Status()
-	m.ginMetricHandle(ctx, isSimpleRequest, startTime, strconv.Itoa(httpcode), code)
+	m.ginMetricHandle(ctx, isSimpleRequest, noFile, startTime, strconv.Itoa(httpcode), code)
 }
 
-func (m *Monitor) ginMetricHandle(ctx *gin.Context, simpleRequest bool, start time.Time, httpcode string, code string) {
+func (m *Monitor) ginMetricHandle(ctx *gin.Context, simpleRequest bool, noFile bool, start time.Time, httpcode string, code string) {
 	// 共同的label
 	labels := []string{ctx.FullPath(), ctx.Request.Method, httpcode, code}
 
-	if simpleRequest {
-		latency := time.Since(start)
-		if int32(latency.Seconds()) > m.slowTime {
+	if simpleRequest && noFile {
+		latency := time.Since(start).Seconds()
+		fmt.Println("latency:", latency)
+		if int32(latency) > m.slowTime {
 			_ = m.GetMetric(metricSlowRequest).Inc(labels)
 		}
 
 		// set request duration
-		_ = m.GetMetric(metricRequestDuration).Observe(labels, latency.Seconds())
+		_ = m.GetMetric(metricRequestDuration).Observe(labels, latency)
 	} else {
 		_ = m.GetMetric(metricLongRequest).Inc(labels)
 	}
