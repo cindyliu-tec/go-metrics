@@ -2,7 +2,11 @@ package go_metrics
 
 import (
 	"net/http"
+	"sync"
 	"time"
+
+	"github.com/bytedance/sonic"
+	"github.com/gin-gonic/gin"
 
 	"git.makeblock.com/makeblock-go/log"
 	"github.com/pkg/errors"
@@ -37,6 +41,15 @@ var (
 		Histogram: histogramHandler,
 		Summary:   summaryHandler,
 	}
+
+	// 响应对象池
+	responseWriterPool = sync.Pool{
+		New: func() any {
+			return &responseWriter{
+				code: defaultBusinessCode,
+			}
+		},
+	}
 )
 
 // Monitor is an object that uses to set gin server monitor.
@@ -70,16 +83,14 @@ func GetMonitor() *Monitor {
 }
 
 // 启动指标服务端口
-func (m *Monitor) setupServer() error {
+func (m *Monitor) setupServer() {
 	http.Handle(m.metricPath, promhttp.HandlerFor(m.promRegistry, promhttp.HandlerOpts{}))
-	var err error
 	go func() {
 		log.Println("Start Metric Server ", m.server.Addr)
-		if err = m.server.ListenAndServe(); err != nil {
+		if err := m.server.ListenAndServe(); err != nil {
 			log.ErrorE("Failed to serve: ", err)
 		}
 	}()
-	return err
 }
 
 // GetMetric used to get metric object by metric_name.
@@ -171,4 +182,22 @@ func summaryHandler(metric *Metric) error {
 		metric.Labels,
 	)
 	return nil
+}
+
+type responseWriter struct {
+	gin.ResponseWriter
+	code string
+}
+
+func (w *responseWriter) Write(b []byte) (int, error) {
+	if jsonCTExpr.MatchString(w.Header().Get("content-type")) {
+		if data, err := sonic.Get(b, "code"); err == nil {
+			if code, err := data.Raw(); err != nil {
+				w.code = "-2"
+			} else {
+				w.code = code
+			}
+		}
+	}
+	return w.ResponseWriter.Write(b)
 }

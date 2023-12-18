@@ -1,14 +1,11 @@
 package go_metrics
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
 	"regexp"
 	"strconv"
 	"time"
 
-	"git.makeblock.com/makeblock-go/utils/v2/response"
 	"github.com/gin-gonic/gin"
 )
 
@@ -19,17 +16,16 @@ var (
 	metricSDKVersion      = "monitor_sdk_version"
 	jsonCTExpr, _         = regexp.Compile("application/json")
 	fileCTExpr, _         = regexp.Compile("multipart/form-data|image|octet-stream")
-	version               = "0.0.7"
+	defaultBusinessCode   = "-1"
+	version               = "0.0.8"
 )
 
 // Use set gin metrics middleware
 func Use(r gin.IRoutes) {
 	m := GetMonitor()
 	m.initGinMetrics()
-	err := m.setupServer()
-	if err == nil {
-		r.Use(m.monitorInterceptor)
-	}
+	m.setupServer()
+	r.Use(m.monitorInterceptor)
 }
 
 // initGinMetrics used to init default metrics
@@ -67,29 +63,20 @@ func (m *Monitor) initGinMetrics() {
 	_ = m.GetMetric(metricSDKVersion).SetGaugeValue([]string{version}, 1)
 }
 
-type responseWriter struct {
-	gin.ResponseWriter
-	b *bytes.Buffer
-}
-
-func (w responseWriter) Write(b []byte) (int, error) {
-	w.b.Write(b)
-	return w.ResponseWriter.Write(b)
-}
-
 // monitorInterceptor as gin monitor middleware.
 func (m *Monitor) monitorInterceptor(ctx *gin.Context) {
 	startTime := time.Now()
 	isSimpleRequest := true
 	noFile := true
-	var writer *responseWriter
-	var code = "-1"
+	writer := responseWriterPool.Get().(*responseWriter)
+
+	reqHeaders := ctx.Request.Header
 	// websocket请求
-	if ctx.Request.Header.Get("upgrade") == "websocket" {
+	if reqHeaders.Get("upgrade") == "websocket" {
 		isSimpleRequest = false
 	}
 	// 文件上传请求
-	if fileCTExpr.MatchString(ctx.Request.Header.Get("content-type")) {
+	if fileCTExpr.MatchString(reqHeaders.Get("content-type")) {
 		noFile = false
 		form, err := ctx.MultipartForm()
 		// 如果上传文件数为0，当作简单请求处理
@@ -97,29 +84,19 @@ func (m *Monitor) monitorInterceptor(ctx *gin.Context) {
 			noFile = true
 		}
 	}
-	if isSimpleRequest {
-		writer = &responseWriter{
-			ResponseWriter: ctx.Writer,
-			b:              bytes.NewBuffer([]byte{}),
-		}
-		ctx.Writer = writer
-	}
+	writer.ResponseWriter = ctx.Writer
+	ctx.Writer = writer
 
 	// 执行请求其他流程
 	ctx.Next()
 
-	// 简单请求如果返回json，读取业务code
-	if isSimpleRequest && jsonCTExpr.MatchString(ctx.Writer.Header().Get("content-type")) {
-		var data = response.APIModel{
-			Code: -1,
-		}
-		if err := json.Unmarshal(writer.b.Bytes(), &data); err == nil {
-			code = strconv.Itoa(int(data.Code))
-		}
-		writer.b = nil
-	}
 	httpcode := ctx.Writer.Status()
-	m.ginMetricHandle(ctx, isSimpleRequest, noFile, startTime, strconv.Itoa(httpcode), code)
+
+	go func() {
+		m.ginMetricHandle(ctx, isSimpleRequest, noFile, startTime, strconv.Itoa(httpcode), writer.code)
+		writer.code = defaultBusinessCode
+		responseWriterPool.Put(writer)
+	}()
 }
 
 func (m *Monitor) ginMetricHandle(ctx *gin.Context, simpleRequest bool, noFile bool, start time.Time, httpcode string, code string) {
@@ -128,7 +105,6 @@ func (m *Monitor) ginMetricHandle(ctx *gin.Context, simpleRequest bool, noFile b
 
 	if simpleRequest && noFile {
 		latency := time.Since(start).Seconds()
-		fmt.Println("latency:", latency)
 		if int32(latency) > m.slowTime {
 			_ = m.GetMetric(metricSlowRequest).Inc(labels)
 		}

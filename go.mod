@@ -4,7 +4,7 @@ go 1.18
 
 require (
 	git.makeblock.com/makeblock-go/log v1.0.0
-	git.makeblock.com/makeblock-go/utils/v2 v2.7.0
+	github.com/bytedance/sonic v1.9.1
 	github.com/gin-gonic/gin v1.9.1
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.17.0
@@ -12,7 +12,6 @@ require (
 
 require (
 	github.com/beorn7/perks v1.0.1 // indirect
-	github.com/bytedance/sonic v1.9.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/chenzhuoyu/base64x v0.0.0-20221115062448-fe3a3abad311 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.2 // indirect
