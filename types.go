@@ -144,7 +144,7 @@ func (m *Monitor) AddMetric(metric *Metric) error {
 	return errors.Errorf("metric type '%d' not existed.", metric.Type)
 }
 
-//nolint unparam
+// nolint unparam
 func counterHandler(metric *Metric) error {
 	metric.vec = prometheus.NewCounterVec(
 		prometheus.CounterOpts{Name: metric.Name, Help: metric.Description},
@@ -153,7 +153,7 @@ func counterHandler(metric *Metric) error {
 	return nil
 }
 
-//nolint unparam
+// nolint unparam
 func gaugeHandler(metric *Metric) error {
 	metric.vec = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{Name: metric.Name, Help: metric.Description},
