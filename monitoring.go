@@ -91,24 +91,27 @@ func (m *Monitor) monitorInterceptor(ctx *gin.Context) {
 	ctx.Next()
 
 	httpcode := ctx.Writer.Status()
-
+	path := ctx.FullPath()
+	method := ctx.Request.Method
+	if path == "" {
+		path = "unknow"
+	}
 	go func() {
-		m.ginMetricHandle(ctx, isSimpleRequest, noFile, startTime, strconv.Itoa(httpcode), writer.code)
+		m.ginMetricHandle(path, method, isSimpleRequest, noFile, startTime, strconv.Itoa(httpcode), writer.code)
 		writer.code = defaultBusinessCode
 		responseWriterPool.Put(writer)
 	}()
 }
 
-func (m *Monitor) ginMetricHandle(ctx *gin.Context, simpleRequest bool, noFile bool, start time.Time, httpcode string, code string) {
+func (m *Monitor) ginMetricHandle(path string, method string, simpleRequest bool, noFile bool, start time.Time, httpcode string, code string) {
 	// 共同的label
-	labels := []string{ctx.FullPath(), ctx.Request.Method, httpcode, code}
+	labels := []string{path, method, httpcode, code}
 
 	if simpleRequest && noFile {
 		latency := time.Since(start).Seconds()
 		if int32(latency) > m.slowTime {
 			_ = m.GetMetric(metricSlowRequest).Inc(labels)
 		}
-
 		// set request duration
 		_ = m.GetMetric(metricRequestDuration).Observe(labels, latency)
 	} else {
