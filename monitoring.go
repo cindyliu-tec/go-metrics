@@ -17,7 +17,7 @@ var (
 	jsonCTExpr, _         = regexp.Compile("application/json")
 	fileCTExpr, _         = regexp.Compile("multipart/form-data|image|octet-stream")
 	defaultBusinessCode   = "-1"
-	version               = "0.0.8"
+	version               = "0.0.9"
 )
 
 // Use set gin metrics middleware

@@ -1,17 +1,16 @@
 package go_metrics
 
 import (
+	"git.makeblock.com/makeblock-go/log"
+	"github.com/bytedance/sonic"
+	"github.com/gin-gonic/gin"
+	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"net/http"
 	"sync"
 	"time"
-
-	"github.com/bytedance/sonic"
-	"github.com/gin-gonic/gin"
-
-	"git.makeblock.com/makeblock-go/log"
-	"github.com/pkg/errors"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 type MetricType int
@@ -65,6 +64,10 @@ type Monitor struct {
 // GetMonitor 返回单例 Monitor 对象
 func GetMonitor() *Monitor {
 	if monitor == nil {
+		registry := prometheus.NewRegistry()
+		if err := registry.Register(collectors.NewGoCollector()); err != nil {
+			log.ErrorE("register go runtime metrics failed", err)
+		}
 		monitor = &Monitor{
 			metricPath:  defaultMetricPath,
 			slowTime:    defaultSlowTime,
@@ -76,7 +79,7 @@ func GetMonitor() *Monitor {
 				ReadHeaderTimeout: timeoutInSeconds * time.Second,
 				WriteTimeout:      timeoutInSeconds * time.Second,
 			},
-			promRegistry: prometheus.NewRegistry(),
+			promRegistry: registry,
 		}
 	}
 	return monitor
