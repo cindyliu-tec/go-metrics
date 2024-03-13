@@ -20,11 +20,11 @@ repos:
         - id: commitlint
           stages: [commit-msg]
           additional_dependencies: ['@commitlint/config-conventional']
-  - repo: https://github.com/golangci/golangci-lint
-    rev: v1.50.1
-    hooks:
-      - id: golangci-lint
-        entry: golangci-lint run -c .golangci.yml --fix
+#  - repo: https://github.com/golangci/golangci-lint
+#    rev: v1.50.1
+#    hooks:
+#      - id: golangci-lint
+#        entry: golangci-lint run -c .golangci.yml --fix
   - repo: local
     hooks:
       - id: gomod

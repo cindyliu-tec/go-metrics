@@ -1,6 +1,12 @@
 package go_metrics
 
 import (
+	"net/http"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
 	"git.makeblock.com/makeblock-go/log"
 	"github.com/bytedance/sonic"
 	"github.com/gin-gonic/gin"
@@ -8,9 +14,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"net/http"
-	"sync"
-	"time"
 )
 
 type MetricType int
@@ -30,9 +33,11 @@ const (
 )
 
 var (
-	defaultDuration = []float64{0.005, 0.02, 0.05, 0.1, 0.2, 0.3, 0.5, 0.8, 1, 1.2, 1.5, 2, 3, 5, 10}
-	initLabels      = []string{"env", "namespace", "app", "pod"}
-	monitor         *Monitor
+	defaultDuration               = []float64{0.005, 0.02, 0.05, 0.1, 0.15, 0.2, 0.3, 0.5, 1, 2, 5}
+	customMetricDefaultDuration   = []float64{5, 20, 50, 100, 200, 300, 500, 1000, 5000}
+	customMetricDefaultObjectives = map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001}
+	initLabels                    = []string{"env", "namespace", "app", "pod"}
+	monitor                       *Monitor
 
 	promTypeHandler = map[MetricType]func(metric *Metric) error{
 		Counter:   counterHandler,
@@ -122,12 +127,12 @@ func (m *Monitor) SetSlowTime(slowTime int32) {
 
 // SetDuration set reqDuration property. reqDuration is used to ginRequestDuration
 // metric buckets.
-func (m *Monitor) SetDuration(duration []float64) {
+func (m *Monitor) setDuration(duration []float64) {
 	m.reqDuration = duration
 }
 
-// AddMetric 添加自定义指标.
-func (m *Monitor) AddMetric(metric *Metric) error {
+// AddMetric 添加指标.
+func (m *Monitor) addMetric(metric *Metric) error {
 	if metric.Name == "" {
 		return errors.Errorf("metric name cannot be empty.")
 	}
@@ -142,6 +147,42 @@ func (m *Monitor) AddMetric(metric *Metric) error {
 			m.promRegistry.MustRegister(metric.vec)
 			m.metrics[metric.Name] = metric
 			return nil
+		} else {
+			return errors.Wrap(err, "register metric failed")
+		}
+	}
+	return errors.Errorf("metric type '%d' not existed.", metric.Type)
+}
+
+// AddCustomMetric 注册自定义指标.
+func (m *Monitor) AddCustomMetric(metric *Metric) error {
+	if metric.Name == "" {
+		return errors.Errorf("metric name cannot be empty.")
+	}
+	metric.Name = metricPrefix + metric.Name
+	if _, ok := m.metrics[metric.Name]; ok {
+		return errors.Errorf("metric '%s' is existed", metric.Name)
+	}
+
+	if metric.Type == Histogram && metric.Buckets == nil {
+		metric.Buckets = customMetricDefaultDuration
+	}
+
+	if metric.Type == Summary && metric.Objectives == nil {
+		metric.Objectives = customMetricDefaultObjectives
+	}
+
+	if f, ok := promTypeHandler[metric.Type]; ok {
+		metric.Labels = append(initLabels, metric.Labels...)
+		if err := f(metric); err == nil {
+			m.promRegistry.MustRegister(metric.vec)
+			m.metrics[metric.Name] = metric
+			metricType := strconv.Itoa(int(metric.Type))
+			labelNames := strings.Join(metric.Labels, ",")
+			_ = m.GetMetric(metricCustom).SetGaugeValue([]string{metric.Name, metricType, metric.Description, labelNames}, 1)
+			return nil
+		} else {
+			return errors.Wrap(err, "register custom metric failed")
 		}
 	}
 	return errors.Errorf("metric type '%d' not existed.", metric.Type)

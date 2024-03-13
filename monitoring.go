@@ -14,10 +14,11 @@ var (
 	metricSlowRequest     = "gin_slow_request_total"
 	metricLongRequest     = "gin_long_request_total"
 	metricSDKVersion      = "monitor_sdk_version"
+	metricCustom          = "monitor_custom_metric"
 	jsonCTExpr, _         = regexp.Compile("application/json")
 	fileCTExpr, _         = regexp.Compile("multipart/form-data|image|octet-stream")
 	defaultBusinessCode   = "-1"
-	version               = "0.0.9"
+	version               = "0.1"
 )
 
 // Use set gin metrics middleware
@@ -31,7 +32,7 @@ func Use(r gin.IRoutes) {
 // initGinMetrics used to init default metrics
 func (m *Monitor) initGinMetrics() {
 	// api耗时指标
-	_ = monitor.AddMetric(&Metric{
+	_ = monitor.addMetric(&Metric{
 		Type:        Histogram,
 		Name:        metricRequestDuration,
 		Description: "the time server took to handle the request.",
@@ -39,26 +40,34 @@ func (m *Monitor) initGinMetrics() {
 		Buckets:     m.reqDuration,
 	})
 	// 慢请求指标
-	_ = monitor.AddMetric(&Metric{
+	_ = monitor.addMetric(&Metric{
 		Type:        Counter,
 		Name:        metricSlowRequest,
 		Description: fmt.Sprintf("the server handled slow requests counter, t=%d.", m.slowTime),
 		Labels:      []string{"uri", "method", "httpcode", "code"},
 	})
 
-	_ = monitor.AddMetric(&Metric{
+	_ = monitor.addMetric(&Metric{
 		Type:        Counter,
 		Name:        metricLongRequest,
 		Description: "the server handled long requests counter, like websocket、fileupload",
 		Labels:      []string{"uri", "method", "httpcode", "code"},
 	})
 
-	_ = monitor.AddMetric(&Metric{
+	_ = monitor.addMetric(&Metric{
 		Type:        Gauge,
 		Name:        metricSDKVersion,
 		Description: "current used monitor pkg version",
 		Labels:      []string{"version"},
 	})
+
+	_ = monitor.addMetric(&Metric{
+		Type:        Gauge,
+		Name:        metricCustom,
+		Description: "custom metrics",
+		Labels:      []string{"metricName", "metricType", "desc", "labels"},
+	})
+
 	// 上报当前sdk版本
 	_ = m.GetMetric(metricSDKVersion).SetGaugeValue([]string{version}, 1)
 }
