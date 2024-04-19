@@ -15,22 +15,28 @@ var (
 	metricLongRequest     = "gin_long_request_total"
 	metricSDKVersion      = "monitor_sdk_version"
 	metricCustom          = "monitor_custom_metric"
+	MetricSQLDuration     = "sql_query_duration"
+	metricRedisDuration   = "redis_query_duration"
 	jsonCTExpr, _         = regexp.Compile("application/json")
 	fileCTExpr, _         = regexp.Compile("multipart/form-data|image|octet-stream")
 	defaultBusinessCode   = "-1"
-	version               = "0.1"
+	version               = "0.2.1"
 )
+
+func init() {
+	m := GetMonitor()
+	m.initMetrics()
+	m.setupServer()
+}
 
 // Use set gin metrics middleware
 func Use(r gin.IRoutes) {
 	m := GetMonitor()
-	m.initGinMetrics()
-	m.setupServer()
 	r.Use(m.monitorInterceptor)
 }
 
 // initGinMetrics used to init default metrics
-func (m *Monitor) initGinMetrics() {
+func (m *Monitor) initMetrics() {
 	// api耗时指标
 	_ = monitor.addMetric(&Metric{
 		Type:        Histogram,
@@ -66,6 +72,22 @@ func (m *Monitor) initGinMetrics() {
 		Name:        metricCustom,
 		Description: "custom metrics",
 		Labels:      []string{"metricName", "metricType", "desc", "labels"},
+	})
+
+	_ = monitor.addMetric(&Metric{
+		Type:        Histogram,
+		Name:        MetricSQLDuration,
+		Description: "the time took to query from sql server.",
+		Labels:      []string{"sql"},
+		Buckets:     dbMetricDefaultDuration,
+	})
+
+	_ = monitor.addMetric(&Metric{
+		Type:        Histogram,
+		Name:        metricRedisDuration,
+		Description: "the time took to query from redis.",
+		Labels:      []string{"cmd"},
+		Buckets:     redisMetricDefaultDuration,
 	})
 
 	// 上报当前sdk版本

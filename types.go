@@ -33,8 +33,10 @@ const (
 )
 
 var (
-	defaultDuration               = []float64{0.005, 0.02, 0.05, 0.1, 0.15, 0.2, 0.3, 0.5, 1, 2, 5}
-	customMetricDefaultDuration   = []float64{5, 20, 50, 100, 200, 300, 500, 1000, 5000}
+	defaultDuration               = []float64{0.005, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5}
+	customMetricDefaultDuration   = []float64{5, 20, 100, 200, 500, 1000, 5000}
+	dbMetricDefaultDuration       = []float64{2, 5, 10, 20, 100, 200, 1000, 5000}
+	redisMetricDefaultDuration    = []float64{500, 1000, 2000, 3000, 5000, 10000} // unit μs
 	customMetricDefaultObjectives = map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001}
 	initLabels                    = []string{"env", "namespace", "app", "pod"}
 	monitor                       *Monitor

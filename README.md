@@ -26,5 +26,3 @@ mk_gin_long_request_total{app="demo-project", code="-1", container="demo-project
 mk_monitor_sdk_version{app="demo-project", container="demo-project", endpoint="metrics", env="dev", namespace="dev-common", pod="demo-project-554657784d-fc75p", version="0.0.1"}
 ```
 
-## 使用指南
-https://makeblock.feishu.cn/docx/EzrldrvqeoyLsuxeTW1cLk6SnTf?from=from_copylink
